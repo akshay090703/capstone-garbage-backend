@@ -30,9 +30,6 @@ jwt = JWTManager(app)
 
 model = load_model('Garbage_classification.h5')
 class_labels = ['cardboard', 'glass', 'metal', 'paper', 'plastic', 'trash']
-               
-if not os.path.exists('uploads'):
-    os.makedirs('uploads')
 
 import jwt                  
 import logging
