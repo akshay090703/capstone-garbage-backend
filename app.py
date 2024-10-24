@@ -1,6 +1,6 @@
 import datetime
 from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 from bson import ObjectId
@@ -128,6 +128,7 @@ import base64
 @app.route('/predict', methods=['POST'])
 @token_required
 def predict(current_user):
+    print("In request")
     if 'file' not in request.files:
         return jsonify({'error': 'No file uploaded'}), 400
 
@@ -173,7 +174,9 @@ def get_history(current_user):
     return jsonify(history), 200
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))  
+    port = int(os.environ.get('PORT', 5000))  # Get the dynamic PORT from Render or default to 5000 locally
     app.run(host='0.0.0.0', port=port, debug=True)
 
 
+
+# flask run --host=0.0.0.0 --port=5000
