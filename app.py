@@ -125,36 +125,69 @@ def get_user(current_user):
 
 import base64
 
+# @app.route('/predict', methods=['POST'])
+# @token_required
+# def predict(current_user):
+#     print("In request")
+#     if 'file' not in request.files:
+#         return jsonify({'error': 'No file uploaded'}), 400
+
+#     file = request.files['file']
+#     if not file:
+#         return jsonify({'error': 'File is empty'}), 400
+
+#     user_id = str(current_user['_id'])
+
+#     image_content = file.read()
+#     base64_image = base64.b64encode(image_content).decode('utf-8') 
+
+#     img = preprocess_image(image_content)  
+#     prediction = model.predict(img)
+#     predicted_class = class_labels[np.argmax(prediction)]
+
+#     result = {
+#         'userId': ObjectId(user_id),
+#         'prediction': predicted_class,
+#         'date': datetime.datetime.utcnow(),
+#         'image_base64': base64_image  
+#     }
+
+#     db.results.insert_one(result)
+
+#     return jsonify({'material': predicted_class, 'image_base64': base64_image}), 200
+
+# The version accepts base64 url instead of multi part image
 @app.route('/predict', methods=['POST'])
 @token_required
 def predict(current_user):
-    print("In request")
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
+    data = request.get_json()
 
-    file = request.files['file']
-    if not file:
-        return jsonify({'error': 'File is empty'}), 400
+    if 'image' not in data:
+        return jsonify({'error': 'No image data provided'}), 400
 
-    user_id = str(current_user['_id'])
+    image_base64 = data['image']
+    
+    # Decode the base64 image back to binary
+    try:
+        image_content = base64.b64decode(image_base64.split(',')[1])  # Split to remove metadata
+    except Exception as e:
+        return jsonify({'error': 'Invalid image format'}), 400
 
-    image_content = file.read()
-    base64_image = base64.b64encode(image_content).decode('utf-8') 
-
-    img = preprocess_image(image_content)  
+    # Preprocess and predict
+    img = preprocess_image(image_content)  # Ensure this handles raw binary correctly
     prediction = model.predict(img)
     predicted_class = class_labels[np.argmax(prediction)]
 
     result = {
-        'userId': ObjectId(user_id),
+        'userId': ObjectId(str(current_user['_id'])),
         'prediction': predicted_class,
         'date': datetime.datetime.utcnow(),
-        'image_base64': base64_image  
+        'image_base64': image_base64
     }
 
     db.results.insert_one(result)
 
-    return jsonify({'material': predicted_class, 'image_base64': base64_image}), 200
+    return jsonify({'material': predicted_class, 'image_base64': image_base64}), 200
 
 
 # Get user's classification history
@@ -165,7 +198,8 @@ def get_history(current_user):
     results = list(db.results.find({'userId': ObjectId(user_id)}).sort('date', -1).limit(20))
 
     history = [{
-        'userId': str(r['userId']),  
+        'id': str(r['_id']),  
+        'userId': str(r['userId']),
         'prediction': r['prediction'],
         'date': r['date'],
         'image_base64': r['image_base64']
@@ -173,10 +207,27 @@ def get_history(current_user):
 
     return jsonify(history), 200
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))  # Get the dynamic PORT from Render or default to 5000 locally
-    app.run(host='0.0.0.0', port=port, debug=True)
+# Delete a record from history
+@app.route('/delete/<record_id>', methods=['DELETE'])
+@token_required
+def delete_history(current_user, record_id):
+    user_id = str(current_user['_id'])
+    
+    # Check if the record belongs to the current user
+    result = db.results.find_one({'_id': ObjectId(record_id), 'userId': ObjectId(user_id)})
+    
+    if not result:
+        return jsonify({'error': 'Record not found or does not belong to the user'}), 404
 
+    # Delete the record
+    db.results.delete_one({'_id': ObjectId(record_id)})
+    
+    return jsonify({'message': 'Record deleted successfully'}), 200
+
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000)) 
+    app.run(host='0.0.0.0', port=port, debug=True)
 
 
 # flask run --host=0.0.0.0 --port=5000
